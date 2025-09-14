@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--codebase", type=str, help="Path to the codebase to analyze")
 
     parser.add_argument("--temperature", type=float, default=0, help="Temperature for model generation")
+    parser.add_argument("--save-analysis", action="store_true", help="Save the detailed analysis to a file")
     args = parser.parse_args()
 
     # Initialize the model manager, get available models and select one
@@ -66,11 +67,27 @@ def main():
         print(f"  - {product}")
     print("\nDetailed Analysis:")
     print(detailed_analysis)
+
+    if (args.save_analysis):
+        # Save detailed analysis to a file
+        output_dir = "analysis_results"
+        os.makedirs(output_dir, exist_ok=True)
+        output_filename = os.path.join(output_dir, f"{args.cve} - AI analysis.md")
+        with open(output_filename, "w") as f:
+            f.write(f"# Analysis of {args.cve}\n\n")
+            f.write(f"## Description\n{description}\n\n")
+            f.write(f"## Severity\n{severity}\n\n")
+            f.write(f"## Affected Products\n")
+            for product in affected_products:
+                f.write(f"  - {product}\n")
+            f.write(f"\n## Detailed AI Analysis\n{detailed_analysis}\n")
+        print(f"\nDetailed analysis saved to {output_filename}")
     
     # Analyze codebase if provided
     if args.codebase:
+        codebase_name = os.path.basename(args.codebase.rstrip(os.sep))
         print(f"\n{'=' * 80}")
-        print(f"Codebase Analysis: {args.codebase}")
+        print(f"Codebase Analysis: {codebase_name} ({args.codebase})")
         print(f"{'=' * 80}")
         
         # Load codebase
@@ -86,6 +103,12 @@ def main():
         
         print(relevance_analysis)
 
+        if (args.save_analysis):
+            output_filename = os.path.join(output_dir, f"{codebase_name} - {args.cve} - AI analysis.md")
+            with open(output_filename, "a") as f:
+                f.write(f"# Analysis of {codebase_name} for {args.cve}\n\n")
+                f.write(f"\n## Codebase Relevance Analysis\n{relevance_analysis}\n")
+            print(f"\nCodebase analysis saved to {output_filename}")
 
 if __name__ == "__main__":
     main()

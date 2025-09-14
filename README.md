@@ -132,3 +132,5 @@ All AI-generated code was reviewed and modified to ensure it meets best practice
 - Large codebases may be only partially analyzed due to token limits of AI models.
 - The tool focuses on known vulnerabilities (CVEs) and cannot detect novel security issues.
 - Dependency detection is based on code analysis rather than package manager files, which may lead to false negatives.
+- The tool does not provide remediation advice beyond flagging potential vulnerabilities.
+- The tool was not tested with OpenAI and Ollama models.

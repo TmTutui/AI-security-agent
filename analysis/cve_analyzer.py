@@ -181,7 +181,7 @@ class CVEAnalyzer:
         
         try:
             # Generate the analysis using the language model
-            analysis = self.llm(prompt)
+            analysis = self.llm.invoke(prompt).content
             return analysis
         except Exception as e:
             print(f"Error generating detailed analysis: {e}")

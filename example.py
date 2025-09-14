@@ -21,7 +21,7 @@ def main():
     codebase_path = os.getcwd()
     
     # Choose a model (make sure you have the API key in .env)
-    model_name = "openai/gpt-3.5-turbo"  # Change this to a model you have API key for
+    model_name = "models/gemini-2.5-flash"  # Change this to a model you have API key for
     
     print(f"Analyzing {cve_id} using {model_name}...\n")
     

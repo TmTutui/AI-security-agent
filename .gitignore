@@ -23,3 +23,6 @@ ENV/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Output files
+analysis_results/
