@@ -3,29 +3,21 @@
 CVE Explainer Tool
 
 A tool to help security engineers understand vulnerability reports (CVE).
-This script uses LangChain to interact with various AI models to provide
+This script uses a modular architecture to interact with various AI models to provide
 detailed information about CVEs and their relevance to a codebase.
 """
 
 import os
-import sys
 import argparse
-from pathlib import Path
-from typing import Dict, List, Optional, Union
-import requests
-import json
-
-# LangChain imports
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import TextLoader, DirectoryLoader
 
 # Load environment variables
 from dotenv import load_dotenv
 
-# Model imports - conditionally imported based on available API keys
+# Import modular components
+from models.model_manager import ModelManager
+from data.data_fetcher import DataFetcher
+from analysis.cve_analyzer import CVEAnalyzer
+from analysis.codebase_analyzer import CodebaseAnalyzer
 
 
 class CVEExplainer:
@@ -38,41 +30,24 @@ class CVEExplainer:
             model_name: The name of the AI model to use.
         """
         self.model_name = model_name
-        self.llm = self._initialize_model()
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=4000,
-            chunk_overlap=200,
-            length_function=len,
-        )
+        
+        # Initialize the model manager
+        self.model_manager = ModelManager()
+        
+        # Initialize the model
+        self.llm = self.model_manager.initialize_model(model_name)
+        if not self.llm:
+            raise ValueError(f"Failed to initialize model: {model_name}")
+            
+        # Initialize components
+        self.data_fetcher = DataFetcher(self.llm)
+        self.cve_analyzer = CVEAnalyzer(self.llm)
+        self.codebase_analyzer = CodebaseAnalyzer(self.llm)
 
+    # This method is now handled by ModelManager
     def _initialize_model(self):
-        """Initialize the specified AI model.
-
-        Returns:
-            An initialized LLM instance.
-
-        Raises:
-            ValueError: If the model is not supported or the API key is missing.
-        """
-        if self.model_name.startswith("openai"):
-            from langchain_openai import ChatOpenAI
-            return ChatOpenAI(model_name=self.model_name, temperature=0)
-        
-        elif self.model_name.startswith("gemini"):
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            return ChatGoogleGenerativeAI(model=self.model_name, temperature=0)
-        
-        elif self.model_name.startswith("mistral"):
-            from langchain_mistralai.chat_models import ChatMistralAI
-            return ChatMistralAI(model=self.model_name, temperature=0)
-        
-        elif self.model_name.startswith("ollama"):
-            from langchain_community.llms import Ollama
-            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            return Ollama(model=self.model_name.replace("ollama/", ""), base_url=base_url)
-        
-        else:
-            raise ValueError(f"Unsupported model: {self.model_name}")
+        """Initialize the specified AI model (legacy method, now handled by ModelManager)."""
+        return self.model_manager.initialize_model(self.model_name)
 
     def fetch_cve_data(self, cve_id: str) -> Dict:
         """Fetch CVE data from the NVD API.
@@ -86,20 +61,7 @@ class CVEExplainer:
         Raises:
             Exception: If the CVE data cannot be fetched.
         """
-        try:
-            # Use the NVD API to fetch CVE data
-            url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
-            response = requests.get(url)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data.get("totalResults", 0) == 0:
-                raise Exception(f"No data found for {cve_id}")
-                
-            return data
-        except Exception as e:
-            print(f"Error fetching CVE data: {e}")
-            raise
+        return self.data_fetcher.fetch_cve_data(cve_id)
             
     def fetch_additional_vulnerability_data(self, cve_id: str) -> Dict:
         """Fetch additional vulnerability data from multiple sources.
@@ -110,48 +72,7 @@ class CVEExplainer:
         Returns:
             A dictionary containing additional vulnerability data.
         """
-        additional_data = {}
-        
-        # Try to fetch data from MITRE CVE
-        try:
-            # MITRE CVE API
-            mitre_url = f"https://cveawg.mitre.org/api/cve/{cve_id}"
-            mitre_response = requests.get(mitre_url)
-            if mitre_response.status_code == 200:
-                additional_data["mitre"] = mitre_response.json()
-        except Exception as e:
-            print(f"Error fetching MITRE data: {e}")
-        
-        # Try to fetch EPSS (Exploit Prediction Scoring System) data
-        try:
-            # EPSS API
-            epss_url = f"https://api.first.org/data/v1/epss?cve={cve_id}"
-            epss_response = requests.get(epss_url)
-            if epss_response.status_code == 200:
-                epss_data = epss_response.json()
-                if epss_data.get("data") and len(epss_data["data"]) > 0:
-                    additional_data["epss"] = epss_data["data"][0]
-        except Exception as e:
-            print(f"Error fetching EPSS data: {e}")
-        
-        # Try to fetch data from GitHub Advisory Database
-        try:
-            # GitHub Security Advisory API
-            github_url = f"https://api.github.com/search/repositories?q={cve_id}+in:readme"
-            github_response = requests.get(github_url)
-            if github_response.status_code == 200:
-                github_data = github_response.json()
-                if github_data.get("items"):
-                    additional_data["github"] = {
-                        "related_repositories": [
-                            {"name": repo["full_name"], "url": repo["html_url"]}
-                            for repo in github_data["items"][:5]  # Limit to 5 repositories
-                        ]
-                    }
-        except Exception as e:
-            print(f"Error fetching GitHub data: {e}")
-            
-        return additional_data
+        return self.data_fetcher.fetch_additional_vulnerability_data(cve_id)
 
     def load_codebase(self, path: str) -> List[Document]:
         """Load the codebase from the specified path.
@@ -162,32 +83,7 @@ class CVEExplainer:
         Returns:
             A list of Document objects containing the codebase content.
         """
-        try:
-            path_obj = Path(path)
-            if not path_obj.exists():
-                raise ValueError(f"Path does not exist: {path}")
-
-            if path_obj.is_file():
-                loader = TextLoader(path)
-                documents = loader.load()
-            else:
-                # Load all text files from the directory
-                loader = DirectoryLoader(
-                    path,
-                    glob="**/*.*",
-                    exclude=["**/.git/**", "**/node_modules/**", "**/__pycache__/**"],
-                    loader_cls=TextLoader,
-                    show_progress=True,
-                    silent_errors=True,
-                )
-                documents = loader.load()
-
-            # Split documents into chunks
-            split_docs = self.text_splitter.split_documents(documents)
-            return split_docs
-        except Exception as e:
-            print(f"Error loading codebase: {e}")
-            return []
+        return self.codebase_analyzer.load_codebase(path)
 
     def analyze_cve(self, cve_id: str, codebase_path: Optional[str] = None) -> str:
         """Analyze the CVE and its relevance to the codebase.
@@ -206,224 +102,174 @@ class CVEExplainer:
             # Fetch additional vulnerability data from other sources
             additional_data = self.fetch_additional_vulnerability_data(cve_id)
             
-            # Extract relevant information from the CVE data
-            cve_item = cve_data.get("vulnerabilities", [])[0].get("cve", {})
-            description = cve_item.get("descriptions", [])[0].get("value", "No description available")
-            metrics = cve_item.get("metrics", {})
-            cvss_v3 = metrics.get("cvssMetricV31", [{}])[0].get("cvssData", {}) if metrics.get("cvssMetricV31") else {}
-            cvss_v2 = metrics.get("cvssMetricV2", [{}])[0].get("cvssData", {}) if metrics.get("cvssMetricV2") else {}
-            
-            # Get CVSS scores
-            cvss_v3_score = cvss_v3.get("baseScore", "N/A")
-            cvss_v3_severity = cvss_v3.get("baseSeverity", "N/A")
-            cvss_v2_score = cvss_v2.get("baseScore", "N/A")
-            
-            # Get affected products
-            configurations = cve_data.get("vulnerabilities", [])[0].get("cve", {}).get("configurations", [])
-            affected_products = []
-            
-            for config in configurations:
-                for node in config.get("nodes", []):
-                    for cpe_match in node.get("cpeMatch", []):
-                        cpe = cpe_match.get("criteria", "")
-                        if cpe and cpe_match.get("vulnerable", False):
-                            parts = cpe.split(":")
-                            if len(parts) > 4:
-                                vendor = parts[3]
-                                product = parts[4]
-                                version = parts[5] if len(parts) > 5 else "*"
-                                affected_products.append(f"{vendor}:{product}:{version}")
-            
-            # Get EPSS score if available
-            epss_score = "N/A"
-            epss_percentile = "N/A"
-            if additional_data.get("epss"):
-                epss_data = additional_data["epss"]
-                epss_score = epss_data.get("epss", "N/A")
-                epss_percentile = epss_data.get("percentile", "N/A")
-            
-            # Get related GitHub repositories if available
-            github_repos = []
-            if additional_data.get("github") and additional_data["github"].get("related_repositories"):
-                github_repos = additional_data["github"]["related_repositories"]
-            
-            # Prepare CVE summary
-            cve_summary = f"""## CVE Analysis: {cve_id}
-
-### Description
-{description}
-
-### Severity
-- CVSS v3 Score: {cvss_v3_score} ({cvss_v3_severity})
-- CVSS v2 Score: {cvss_v2_score}
-- EPSS Score: {epss_score} (Percentile: {epss_percentile})
-
-### Affected Products/Dependencies
-"""
-            
-            if affected_products:
-                cve_summary += "\n".join([f"- {product}" for product in affected_products])
-            else:
-                cve_summary += "No specific affected products listed."
-                
-            # Add GitHub repositories if available
-            if github_repos:
-                cve_summary += "\n\n### Related GitHub Repositories\n"
-                cve_summary += "\n".join([f"- [{repo['name']}]({repo['url']})" for repo in github_repos])
-                cve_summary += "\n\nThese repositories may contain additional information, patches, or discussions about this vulnerability."
-            
-            # If no codebase path is provided, return just the CVE analysis
-            if not codebase_path:
-                return cve_summary
-            
-            # Load and analyze the codebase
-            documents = self.load_codebase(codebase_path)
-            if not documents:
-                return cve_summary + "\n\n### Codebase Relevance\nNo codebase documents were loaded for analysis."
-            
-            # Create a prompt for analyzing the relevance of the CVE to the codebase
-            relevance_prompt = PromptTemplate(
-                input_variables=["cve_id", "cve_description", "affected_products", "codebase_content"],
-                template="""You are a security expert analyzing the relevance of a vulnerability to a codebase.
-
-CVE ID: {cve_id}
-CVE Description: {cve_description}
-Affected Products/Dependencies: {affected_products}
-
-Codebase content:
-{codebase_content}
-
-Based on the information provided, analyze whether this codebase might be affected by the vulnerability.
-Consider:
-1. Does the codebase use any of the affected dependencies or products?
-2. Are there any patterns in the code that match the vulnerability description?
-3. What specific files or code sections might be vulnerable?
-4. What remediation steps would you recommend?
-
-Provide a detailed analysis with specific references to the codebase where possible.
-"""
+            # Use the CVE analyzer to analyze the CVE
+            description, severity, affected_products, detailed_analysis = self.cve_analyzer.analyze_cve(
+                cve_id, cve_data, additional_data
             )
-            
-            # Prepare the chain
-            chain = LLMChain(llm=self.llm, prompt=relevance_prompt)
-            
-            # Analyze each document chunk and combine the results
-            all_analyses = []
-            for i, doc in enumerate(documents[:10]):  # Limit to first 10 documents to avoid token limits
-                try:
-                    analysis = chain.run({
-                        "cve_id": cve_id,
-                        "cve_description": description,
-                        "affected_products": "\n".join(affected_products),
-                        "codebase_content": doc.page_content
-                    })
-                    all_analyses.append(analysis)
-                except Exception as e:
-                    print(f"Error analyzing document {i}: {e}")
-            
-            # Combine all analyses
-            if all_analyses:
-                # Use the LLM to summarize all analyses
-                summary_prompt = PromptTemplate(
-                    input_variables=["cve_id", "analyses"],
-                    template="""You are a security expert summarizing the relevance of a vulnerability to a codebase.
-
-CVE ID: {cve_id}
-
-Individual file analyses:
-{analyses}
-
-Provide a comprehensive summary of whether this codebase is affected by the vulnerability.
-Include specific files or code patterns that might be vulnerable and recommended remediation steps.
-"""
+                                # If a codebase path is provided, analyze its relevance to the CVE
+            if codebase_path:
+                # Load the codebase
+                documents = self.load_codebase(codebase_path)
+                if not documents:
+                    return "Failed to load codebase."
+                
+                # Analyze codebase relevance
+                relevance_analysis = self.codebase_analyzer.analyze_codebase_relevance(
+                    cve_id, description, affected_products, documents
                 )
                 
-                summary_chain = LLMChain(llm=self.llm, prompt=summary_prompt)
-                relevance_summary = summary_chain.run({
-                    "cve_id": cve_id,
-                    "analyses": "\n\n---\n\n".join(all_analyses)
-                })
+                # Combine the CVE analysis and codebase relevance analysis
+                return f"""
+                {cve_id}
+                Description: {description}
+                Severity: {severity}
+                Affected Products: {', '.join(affected_products) if affected_products else 'None'}
+                
+                Detailed Analysis:
+                {detailed_analysis}
+                
+                Codebase Relevance Analysis:
+                {relevance_analysis}
+                """
             else:
-                relevance_summary = "No detailed analysis could be performed on the codebase."
-            
-            # Combine CVE summary and relevance analysis
-            return f"{cve_summary}\n\n### Codebase Relevance\n{relevance_summary}"
-            
+                # Return just the CVE analysis
+                return f"""
+                
+                Description: {description}
+                Severity: {severity}
+                Affected Products: {', '.join(affected_products) if affected_products else 'None'}
+                
+                Detailed Analysis:
+                {detailed_analysis}
+                """
         except Exception as e:
-            return f"Error analyzing CVE {cve_id}: {str(e)}"
+            return f"Error analyzing CVE: {e}"
+
+    def get_available_models(self):
+        """Get available models from the model manager.
+
+        Returns:
+            A dictionary of available models by provider.
+        """
+        return self.model_manager.get_available_models()
+
+    def select_model(self, available_models, provider=None, model_name=None):
+        """Select a model to use for analysis.
+
+        Args:
+            available_models: A dictionary of available models by provider.
+            provider: The provider to use (e.g., "openai", "gemini", "mistral", "ollama").
+            model_name: The specific model to use.
+
+        Returns:
+            The selected model name.
+        """
+        return self.model_manager.select_model(available_models, provider, model_name)
 
 
-def get_available_models() -> Dict[str, List[str]]:
-    """Get the available AI models based on the API keys in the .env file.
+def main():
+    """Main entry point for the CVE Explainer application."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Analyze CVEs and their relevance to a codebase using AI models.")
+    parser.add_argument("--cve", type=str, help="CVE identifier (e.g., CVE-2021-44228)")
+    parser.add_argument("--codebase", type=str, help="Path to the codebase to analyze")
+    parser.add_argument("--model", type=str, help="Specific model to use for analysis")
+    parser.add_argument("--provider", type=str, choices=["openai", "gemini", "mistral", "ollama"], 
+                        help="Model provider to use")
+    args = parser.parse_args()
 
-    Returns:
-        A dictionary mapping model providers to lists of available models.
-    """
-    available_models = {}
+    # Initialize the model manager
+    model_manager = ModelManager()
     
-    # Check for OpenAI API key
-    if os.getenv("OPENAI_API_KEY"):
-        available_models["OpenAI"] = [
-            "openai/gpt-3.5-turbo",
-            "openai/gpt-4",
-            "openai/gpt-4-turbo"
-        ]
+    # Get available models and select one
+    available_models = model_manager.get_available_models()
+    selected_model = model_manager.select_model(available_models, args.provider, args.model)
     
-    # Check for Gemini API key
-    if os.getenv("GEMINI_API_KEY"):
-        available_models["Gemini"] = [
-            "gemini/gemini-pro"
-        ]
+    if not selected_model:
+        print("No suitable model found. Please check your API keys and model availability.")
+        return
     
-    # Check for Mistral API key
-    if os.getenv("MISTRAL_API_KEY"):
-        available_models["Mistral"] = [
-            "mistral/mistral-small",
-            "mistral/mistral-medium",
-            "mistral/mistral-large"
-        ]
+    # Initialize the CVE Explainer
+    cve_explainer = CVEExplainer(selected_model)
     
-    # Check for Ollama (no API key needed, just check if base URL is set)
-    if os.getenv("OLLAMA_BASE_URL"):
-        available_models["Ollama"] = [
-            "ollama/llama2",
-            "ollama/mistral",
-            "ollama/codellama"
-        ]
+    # Analyze the CVE
+    analysis = cve_explainer.analyze_cve(args.cve, args.codebase)
     
-    return available_models
+    # Print the analysis
+    print(analysis)
 
 
-def select_model() -> str:
-    """Prompt the user to select an AI model from the available options.
+if __name__ == "__main__":
+    # Load environment variables
+    load_dotenv()
+    main()
 
-    Returns:
-        The selected model name.
-    """
-    available_models = get_available_models()
-    
-    if not available_models:
-        print("No API keys found in .env file. Please add at least one API key.")
-        sys.exit(1)
-    
-    print("Available AI models:")
-    all_models = []
-    for provider, models in available_models.items():
-        print(f"\n{provider}:")
-        for i, model in enumerate(models):
-            model_index = len(all_models)
-            all_models.append(model)
-            print(f"  {model_index + 1}. {model}")
-    
-    while True:
-        try:
-            choice = int(input("\nSelect a model (enter the number): "))
-            if 1 <= choice <= len(all_models):
-                return all_models[choice - 1]
+
+            
+                    
+                        
+                            
+                    
+               
+            
+                    
+           
+            if self.mistral_client:
+                try:
+                    mistral_models = self.mistral_client.models.list()
+                    for model in mistral_models.data:
+                        available_models["mistral"].append(model.id)
+                except Exception as e:
+                    print(f"Error fetching Mistral models: {e}")
             else:
-                print(f"Please enter a number between 1 and {len(all_models)}")
-        except ValueError:
-            print("Please enter a valid number")
+                print("Mistral API key is set, but client not initialized. Check API key validity.")
+
+        if self.ollama_base_url and self.ollama_client:
+            try:
+                available_models["ollama"] = [model['name'] for model in self.ollama_client.list()['models']]
+            except Exception as e:
+                print(f"Error fetching Ollama models: {e}")
+
+        return available_models
+
+
+    def select_model(self) -> str:
+        """Prompt the user to select an AI model from the available options.
+
+        Returns:
+            The selected model name.
+        """
+        available_models = self.get_available_models()
+        
+        if not available_models:
+            print("No API keys found in .env file. Please add at least one API key.")
+            sys.exit(1)
+
+        print("\nAvailable AI Models:")
+        model_options = []
+        for provider, models in available_models.items():
+            for model in models:
+                # For Ollama, we don't prepend 'ollama/' as the model name itself is sufficient
+                if provider == "ollama":
+                    model_options.append(model)
+                    print(f"  - {model}")
+                else:
+                    model_options.append(model)
+                    print(f"  - {model} ({provider})")
+
+        while True:
+            selection = input("Enter the desired model (e.g., gpt-4o, gemini-pro, llama2): ").strip()
+            # Check if the selected model is in any of the provider's lists
+            found = False
+            for provider, models in available_models.items():
+                if selection in models:
+                    found = True
+                    break
+            
+            if found:
+                return selection
+            else:
+                print("Invalid selection. Please choose from the available models.")
 
 
 def main():
@@ -451,11 +297,10 @@ def main():
         else:
             codebase_path = input("Enter path to codebase: ")
     
-    # Select the AI model to use
-    model_name = select_model()
-    
-    # Initialize the CVE Explainer
-    explainer = CVEExplainer(model_name)
+    explainer = CVEExplainer("initial_model_placeholder") # Initialize with a placeholder
+    model_name = explainer.select_model()
+    explainer.model_name = model_name # Update the model name after selection
+    explainer.llm = explainer._initialize_model() # Re-initialize LLM with selected model
     
     # Analyze the CVE
     print(f"\nAnalyzing {cve_id} using {model_name}...\n")

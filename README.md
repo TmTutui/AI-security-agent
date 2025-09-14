@@ -26,8 +26,11 @@ A security agent tool to help security engineers understand vulnerability report
 ### Prerequisites
 
 - Python 3.8 or higher
-- API keys for the AI models you want to use (OpenAI, Google Gemini, Mistral AI)
-- Ollama installed locally (optional, for local models)
+- API keys for the LLM models of choice (or Ollama running locally):
+  - OpenAI
+  - Google Gemini
+  - Mistral AI
+  - Ollama
 
 ### Setup
 
@@ -93,7 +96,7 @@ The analysis results will be displayed in the terminal and also saved to a Markd
 ### Technology Choices
 
 - **Python**: Chosen for its rich ecosystem of security and AI libraries, as well as its readability and ease of use.
-- **LangChain**: Provides a flexible framework for working with different language models and creating chains of operations for complex tasks.
+- **LangChain**: Provides a flexible framework for working with different language models and creating chains of operations for complex tasks. I also had previous experience with this library, which helped me speed up development
 - **Multiple AI Model Support**: Different models have different strengths and cost structures. Supporting multiple models gives users flexibility.
 - **NVD API**: The National Vulnerability Database provides comprehensive and up-to-date information about CVEs.
 
@@ -129,7 +132,3 @@ All AI-generated code was reviewed and modified to ensure it meets best practice
 - Large codebases may be only partially analyzed due to token limits of AI models.
 - The tool focuses on known vulnerabilities (CVEs) and cannot detect novel security issues.
 - Dependency detection is based on code analysis rather than package manager files, which may lead to false negatives.
-
-## License
-
-MIT
