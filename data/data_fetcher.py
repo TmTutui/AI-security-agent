@@ -66,6 +66,17 @@ class DataFetcher:
             A dictionary containing additional vulnerability data.
         """
         additional_data = {}
+
+        # Try to fetch data from OSV CVE
+        try:
+            osv_url = f"https://api.osv.dev/v1/vulns/{cve_id}"
+            response = requests.get(osv_url)
+            if response.status_code == 200:
+                osv_data = response.json()
+                if osv_data:
+                    additional_data["osv"] = osv_data
+        except Exception as e:
+            print(f"Error fetching OSV data: {e}")
         
         # Try to fetch data from MITRE CVE
         try:
