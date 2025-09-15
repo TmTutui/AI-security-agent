@@ -24,11 +24,94 @@ class CodebaseAnalyzer:
             llm: The language model to use for analysis.
         """
         self.llm = llm
+
+        # arbitrary values, may need some tweaking
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=4000,
             chunk_overlap=200,
             length_function=len,
         )
+
+        ignored_formats = [
+            "*.pdf",
+            "*.jpeg",
+            "*.jpg",
+            "*.png",
+            "*.gif",
+            "*.svg",
+            "*.ico",
+            "*.avif",
+            "*.webp",
+            "*.mp4",
+            "*.mov",
+            "*.avi",
+            "*.wmv",
+            "*.flv",
+            "*.mkv",
+            "*.mp3",
+            "*.wav",
+            "*.aac",
+            "*.flac",
+            "*.docx",
+            "*.xlsx",
+            "*.pptx",
+            "*.zip",
+            "*.tar.gz",
+            "*.tar",
+            "*.gz",
+            "*.7z",
+            "*.rar",
+            "*.jar",
+            "*.war",
+            "*.ear",
+            "*.dll",
+            "*.so",
+            "*.dylib",
+            "*.exe",
+            "*.bin",
+            "*.iso",
+            "*.img",
+            "*.vmdk",
+            "*.vdi",
+            "*.vhd",
+            "*.vhdx",
+            "*.hdd",
+            "*.hdf",
+            "*.raw",
+            "*.qcow2",
+            "*.vbox",
+            "*.vmx",
+            "*.vmsd",
+            "*.vmsn",
+            "*.vmss",
+            "*.vmem",
+            "*.vmem",
+            "*.vmem",
+        ]
+        ignored_path = [
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/__pycache__/**",
+            "**/venv/**",
+            "**/env/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/target/**",
+            "**/out/**",
+            "**/bin/**",
+            "**/obj/**",
+            "**/tmp/**",
+            "**/cache/**",
+            "**/logs/**",
+            "**/tmp/**",
+            "**/example/**",
+            "**/examples/**",
+            "**/demo/**",
+            "**/demos/**",
+            "**/public/**",
+        ]
+
+        self.ignored_files = ignored_formats + ignored_path
 
     def load_codebase(self, path: str) -> List[Document]:
         """Load the codebase from the specified path.
@@ -48,11 +131,10 @@ class CodebaseAnalyzer:
                 loader = TextLoader(path)
                 documents = loader.load()
             else:
-                # Load all text files from the directory
+                # Load allowed files from the directory
                 loader = DirectoryLoader(
                     path,
-                    glob="**/*.*",
-                    exclude=["**/.git/**", "**/node_modules/**", "**/__pycache__/**"],
+                    exclude=self.ignored_files,
                     loader_cls=TextLoader,
                     show_progress=True,
                     silent_errors=True,
@@ -106,19 +188,19 @@ class CodebaseAnalyzer:
         )
         
         # Prepare the chain
-        chain = LLMChain(llm=self.llm, prompt=relevance_prompt)
+        chain = relevance_prompt | self.llm
         
         # Analyze each document chunk and combine the results
         all_analyses = []
         for i, doc in enumerate(documents[:10]):  # Limit to first 10 documents to avoid token limits
             try:
-                analysis = chain.run({
+                analysis = chain.invoke({
                     "cve_id": cve_id,
                     "cve_description": description,
                     "affected_products": "\n".join(affected_products),
                     "codebase_content": doc.page_content
                 })
-                all_analyses.append(analysis)
+                all_analyses.append(analysis.content)
             except Exception as e:
                 print(f"Error analyzing document {i}: {e}")
         
@@ -140,11 +222,11 @@ class CodebaseAnalyzer:
                 """)
             )
             
-            summary_chain = LLMChain(llm=self.llm, prompt=summary_prompt)
-            relevance_summary = summary_chain.run({
+            summary_chain = summary_prompt | self.llm
+            relevance_summary = summary_chain.invoke({
                 "cve_id": cve_id,
                 "analyses": "\n\n---\n\n".join(all_analyses)
             })
-            return relevance_summary
+            return relevance_summary.content
         else:
             return "No detailed analysis could be performed on the codebase."
