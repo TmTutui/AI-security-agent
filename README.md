@@ -115,17 +115,6 @@ The tool follows a modular design:
 - The tool only analyzes local files and does not transmit your codebase to external services (beyond what the AI API requires).
 - When using Ollama, all processing can be done locally for sensitive codebases.
 
-## How AI Tools Were Used in Development
-
-This project was developed with the assistance of AI tools in the following ways:
-
-1. **Initial Planning**: AI was used to brainstorm the architecture and features of the tool.
-2. **Code Generation**: AI assisted in generating the initial codebase structure and implementing key functionality.
-3. **Documentation**: AI helped draft the README and code comments.
-4. **Debugging**: AI was used to identify and fix issues in the implementation.
-
-All AI-generated code was reviewed and modified to ensure it meets best practices and security standards.
-
 ## Limitations
 
 - The tool's analysis is only as good as the AI model being used.
@@ -134,3 +123,4 @@ All AI-generated code was reviewed and modified to ensure it meets best practice
 - Dependency detection is based on code analysis rather than package manager files, which may lead to false negatives.
 - The tool does not provide remediation advice beyond flagging potential vulnerabilities.
 - The tool was not tested with OpenAI and Ollama models.
+- `exclude` of `DirectoryLoader` in `load_codebase` method is not working as expected (not excluding everything that it should).

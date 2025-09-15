@@ -26,17 +26,17 @@ def main():
 
     # Initialize the model manager, get available models and select one
     model_manager = ModelManager()
-    selected_model = model_manager.select_model()
-    
-    if not selected_model:
+    model_name, model_provider = model_manager.select_model()
+
+    if not model_name or not model_provider:
         print("No suitable model found. Please check your API keys and model availability.")
         return
     
     # Initialize the model
-    llm = model_manager.initialize_model(selected_model, args.temperature)
+    llm = model_manager.initialize_model(model_name, model_provider, args.temperature)
     if not llm:
-        print(f"Failed to initialize model: {selected_model}")
-        return
+        print(f"Failed to initialize model: {model_name}")
+    return
     
     # Initialize components
     data_fetcher = DataFetcher()

@@ -45,7 +45,7 @@ class ModelManager:
             except Exception as e:
                 print(f"Error initializing Ollama client: {e}")
 
-    def initialize_model(self, model_name, temperature=0):
+    def initialize_model(self, model_name: str, provider: str, temperature: float = 0):
         """Initialize the specified AI model.
 
         Args:
@@ -57,19 +57,19 @@ class ModelManager:
         Raises:
             ValueError: If the model is not supported or the API key is missing.
         """
-        if "gpt" in model_name or "davinci" in model_name or "babbage" in model_name or "ada" in model_name:
+        if provider == "openai":
             from langchain_openai import ChatOpenAI
             return ChatOpenAI(model_name=model_name, temperature=temperature, api_key=self.openai_api_key)
         
-        elif "gemini" in model_name:
+        elif provider == "gemini":
             from langchain_google_genai import ChatGoogleGenerativeAI
             return ChatGoogleGenerativeAI(model=model_name, temperature=temperature, google_api_key=self.gemini_api_key)
         
-        elif "mistral" in model_name:
+        elif provider == "mistral":
             from langchain_mistralai.chat_models import ChatMistralAI
             return ChatMistralAI(model=model_name, temperature=temperature, api_key=self.mistral_api_key)
         
-        elif "ollama" in model_name:
+        elif provider == "ollama":
             from langchain_community.llms import Ollama
             base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             return Ollama(model=model_name, base_url=base_url)
@@ -130,11 +130,11 @@ class ModelManager:
 
         return available_models
 
-    def select_model(self) -> str:
+    def select_model(self) -> tuple[str, str]:
         """Prompt the user to select an AI model from the available options.
 
         Returns:
-            The selected model name.
+            The selected model name and its provider as a tuple.
         """
         available_models = self.get_available_models()
         
@@ -160,10 +160,6 @@ class ModelManager:
             found = False
             for provider, models in available_models.items():
                 if selection in models:
-                    found = True
-                    break
+                    return selection, provider
             
-            if found:
-                return selection
-            else:
-                print("Invalid selection. Please choose from the available models.")
+            print("Invalid selection. Please choose from the available models.")
