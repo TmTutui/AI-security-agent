@@ -207,7 +207,7 @@ class TestCVEExplainer(unittest.TestCase):
             )), \
             patch('argparse.ArgumentParser') as mock_arg_parser:
             mock_arg_parser.return_value.parse_args.return_value = MagicMock(
-                cve="CVE-2021-44228", codebase=None, temperature=0, save_analysis=True
+                cve="CVE-2021-44228", codebase=None, temperature=0, save_analysis=True, interactive=False
             )
             main()
 

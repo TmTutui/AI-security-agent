@@ -69,23 +69,23 @@ Then edit the `.env` file and add your API keys for the models you want to use.
 Run the script with a CVE identifier and optionally a path to the codebase:
 
 ```bash
-python cve_explainer.py --cve CVE-2021-44228 --path /path/to/your/codebase
+python main.py --cve CVE-2021-44228 --path /path/to/your/codebase
 ```
 
 If you don't provide the arguments, the script will prompt you for them interactively.
 
 ### Interactive Mode
 
-Simply run the script without arguments:
+Run the script with the `--interactive` flag:
 
 ```bash
-python cve_explainer.py
+python main.py --interactive
 ```
 
 The script will prompt you for:
-1. A CVE identifier
-2. A path to the codebase (or use the current directory)
-3. Which AI model to use (based on available API keys in your `.env` file)
+1. Which AI model to use (based on available API keys in your `.env` file)
+2. A CVE identifier
+3. A path to the codebase (if desired)
 
 ### Output
 
