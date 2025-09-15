@@ -36,7 +36,7 @@ def main():
     llm = model_manager.initialize_model(model_name, model_provider, args.temperature)
     if not llm:
         print(f"Failed to initialize model: {model_name}")
-    return
+        return
     
     # Initialize components
     data_fetcher = DataFetcher()
