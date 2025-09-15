@@ -40,8 +40,18 @@ class DataFetcher:
             
             if data.get("totalResults", 0) == 0:
                 raise Exception(f"No data found for {cve_id}")
-                
-            return data
+            
+            # Extract the first vulnerability and clean it up
+            vulnerability = data["vulnerabilities"][0]["cve"]
+            
+            # Keep only the English description
+            english_description = next((desc["value"] for desc in vulnerability["descriptions"] if desc["lang"] == "en"), None)
+            vulnerability["descriptions"] = english_description
+            
+            cleaned_data = {
+                "cve": vulnerability
+            }
+            return cleaned_data
         except Exception as e:
             print(f"Error fetching CVE data: {e}")
             raise

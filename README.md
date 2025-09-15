@@ -109,6 +109,11 @@ The tool follows a modular design:
 3. **AI Analysis**: Uses LangChain to create prompts for the AI models to analyze the relevance of the CVE to the codebase.
 4. **Result Aggregation**: Combines individual analyses into a comprehensive report.
 
+Some aspects taken into account:
+- **Token utilization**: Some aspects of data requested from the vulnerability APIs is remove to decrease the number of input tokens.
+- **AI Model Selection**: Users can choose from multiple AI models (OpenAI, Google Gemini, Mistral AI, and Ollama).
+- **Result Aggregation**: The tool combines individual analyses into a comprehensive report.
+
 ### Security Considerations
 
 - API keys are stored in a `.env` file which is excluded from version control via `.gitignore`.
