@@ -120,6 +120,20 @@ Some aspects taken into account:
 - The tool only analyzes local files and does not transmit your codebase to external services (beyond what the AI API requires).
 - When using Ollama, all processing can be done locally for sensitive codebases.
 
+## Testing
+
+To run the unit tests for this project, use the following command:
+
+```bash
+python3 -m unittest test_cve_explainer.py
+```
+
+This will execute all tests located in the `tests` directory. The tests cover some functionalities, including:
+- CVE data fetching and parsing
+- Codebase loading and analysis
+- AI model integration and response generation
+- Severity calculation and affected product identification
+
 ## Limitations
 
 - The tool's analysis is only as good as the AI model being used.
